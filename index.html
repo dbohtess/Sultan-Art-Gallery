@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Sultan Art Gallery — digital art and character creation.">
+  <title>Sultan Art Gallery</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="home">
+  <header class="site-header">
+    <a class="brand" href="index.html" aria-label="Sultan Art Gallery home"><span>SULTAN</span> ART GALLERY</a>
+    <button class="menu-button" type="button" aria-expanded="false" aria-controls="site-nav"><span></span><span></span></button>
+    <nav id="site-nav" class="site-nav" aria-label="Main navigation">
+      <a class="active" href="index.html">Home</a>
+      <a href="gallery.html?view=my-drawing">My Drawings</a>
+      <a href="gallery.html?view=ai-art">AI Art</a>
+      <a href="gallery.html?view=Nekorin">Nekorin</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="hero" aria-labelledby="hero-title">
+      <div class="hero-glow" aria-hidden="true"></div>
+      <div class="hero-copy">
+        <p class="eyebrow">Digital Artist <i></i> Character Creator</p>
+        <h1 id="hero-title">SULTAN<br><span>ART GALLERY</span></h1>
+        <p class="statement">MY ART.<br>MY CHARACTERS.<br>MY WORLD.</p>
+        <a class="text-link" href="#collections">Explore collections <span>↘</span></a>
+      </div>
+      <div id="featured-artwork" class="featured-artwork" aria-label="Featured artwork"></div>
+      <p class="scroll-cue" aria-hidden="true">SCROLL <span></span></p>
+    </section>
+
+    <section id="collections" class="collections section-shell">
+      <div class="section-heading">
+        <p class="eyebrow">Selected archives</p>
+        <h2>COLLECTIONS</h2>
+      </div>
+      <div class="category-grid">
+        <a class="category-card violet" href="gallery.html?view=my-drawing">
+          <span class="card-index">01</span><div><h3>MY DRAWINGS</h3><p>Original artwork drawn by me.</p></div><b>View gallery →</b>
+        </a>
+        <a class="category-card indigo" href="gallery.html?view=ai-art">
+          <span class="card-index">02</span><div><h3>AI ART</h3><p>AI-assisted artwork and character visuals.</p></div><b>View gallery →</b>
+        </a>
+        <a class="category-card purple" href="gallery.html?view=Nekorin">
+          <span class="card-index">03</span><div><h3>NEKORIN</h3><p>A focused artwork collection.</p></div><b>View collection →</b>
+        </a>
+      </div>
+    </section>
+  </main>
+
+  <footer><a class="brand" href="index.html"><span>SULTAN</span> ART GALLERY</a><p>Personal digital art archive.</p></footer>
+  <script src="data/artworks.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
