@@ -68,7 +68,9 @@
       grid.appendChild(card);
     });
     document.querySelector('#gallery-count').textContent = `${String(visible.length).padStart(2, '0')} ${current === 'videos' ? 'VIDEOS' : 'ARTWORKS'}`;
-    document.querySelector('#empty-gallery').hidden = visible.length !== 0;
+    const emptyMessage = document.querySelector('#empty-gallery');
+    emptyMessage.textContent = current === 'videos' ? 'No videos have been added yet.' : 'No artwork has been added to this collection yet.';
+    emptyMessage.hidden = visible.length !== 0;
   }
 
   function ownerControls(item) {
