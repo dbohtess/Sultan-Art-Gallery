@@ -12,11 +12,15 @@
     <a class="brand" href="index.html"><span>SULTAN</span> ART GALLERY</a>
     <button class="menu-button" type="button" aria-expanded="false" aria-controls="site-nav"><span></span><span></span></button>
     <nav id="site-nav" class="site-nav" aria-label="Main navigation">
-      <a href="index.html">Home</a><a data-nav="my-drawing" href="gallery.html?view=my-drawing">My Drawings</a><a data-nav="ai-art" href="gallery.html?view=ai-art">AI Art</a><a data-nav="Nekorin" href="gallery.html?view=Nekorin">Nekorin</a>
+      <a href="index.html">Home</a><a data-nav="my-drawing" href="gallery.html?view=my-drawing">My Drawings</a><a data-nav="ai-art" href="gallery.html?view=ai-art">AI Art</a><a data-nav="Nekorin" href="gallery.html?view=Nekorin">Nekorin</a><a data-nav="videos" href="gallery.html?view=videos">Videos</a>
     </nav>
   </header>
   <main class="gallery-main section-shell">
     <header class="gallery-heading"><p id="gallery-kicker" class="eyebrow">Personal archive</p><h1 id="gallery-title">MY DRAWINGS</h1><p id="gallery-intro">Original artwork drawn by me.</p><span id="gallery-count"></span></header>
+    <div id="owner-toolbar" class="owner-toolbar" hidden>
+      <p><b>OWNER MODE</b><span>Local development controls — not secure authentication</span></p>
+      <div><button type="button" data-add-media="image">+ ADD ARTWORK</button><button type="button" data-add-media="video">+ ADD VIDEO</button><button type="button" data-owner-exit>EXIT OWNER MODE</button></div>
+    </div>
     <div id="artwork-grid" class="artwork-grid" aria-live="polite"></div>
     <p id="empty-gallery" class="empty-gallery" hidden>No artwork has been added to this collection yet.</p>
   </main>
@@ -25,10 +29,29 @@
   <div id="lightbox" class="lightbox" role="dialog" aria-modal="true" aria-labelledby="lightbox-title" hidden>
     <button class="lightbox-close" type="button" aria-label="Close viewer">×</button>
     <button class="lightbox-nav previous" type="button" aria-label="Previous artwork">←</button>
-    <figure><div class="lightbox-image-wrap"><img id="lightbox-image" alt=""></div><figcaption><p id="lightbox-type"></p><h2 id="lightbox-title"></h2><p id="lightbox-meta"></p><p id="lightbox-description"></p></figcaption></figure>
+    <figure><div class="lightbox-image-wrap"><img id="lightbox-image" alt=""><video id="lightbox-video" controls playsinline preload="metadata" hidden></video></div><figcaption><p id="lightbox-type"></p><h2 id="lightbox-title"></h2><p id="lightbox-meta"></p><p id="lightbox-description"></p></figcaption></figure>
     <button class="lightbox-nav next" type="button" aria-label="Next artwork">→</button>
     <p class="lightbox-position"><span id="lightbox-current">01</span> / <span id="lightbox-total">01</span></p>
   </div>
-  <script src="data/artworks.js"></script><script src="app.js"></script>
+  <div id="media-modal" class="media-modal" role="dialog" aria-modal="true" aria-labelledby="media-modal-title" hidden>
+    <div class="media-modal-panel">
+      <button class="media-modal-close" type="button" aria-label="Close">×</button>
+      <p class="eyebrow">Owner management</p><h2 id="media-modal-title">ADD ARTWORK</h2>
+      <form id="media-form">
+        <input id="media-id" type="hidden">
+        <input id="media-kind" type="hidden" value="image">
+        <label id="media-file-label">SELECT IMAGE<input id="media-file" type="file" accept="image/jpeg,image/png,image/webp,image/gif"></label>
+        <label>TITLE <input id="media-title" type="text" maxlength="100" placeholder="Optional"></label>
+        <label>DESCRIPTION <textarea id="media-description" maxlength="500" rows="3" placeholder="Optional"></textarea></label>
+        <label>YEAR <input id="media-year" type="text" inputmode="numeric" maxlength="4" placeholder="Optional"></label>
+        <label id="media-collection-label">COLLECTION <select id="media-collection"><option value="my-drawings">MY DRAWINGS</option><option value="ai-art">AI ART</option><option value="nekorin">NEKORIN</option></select></label>
+        <label id="media-featured-label" class="check-label"><input id="media-featured" type="checkbox"> FEATURED ARTWORK</label>
+        <div id="upload-progress" class="upload-progress" hidden><span></span><b>0%</b></div>
+        <p id="media-form-status" class="form-status" role="status"></p>
+        <button class="media-save" type="submit">SAVE / ADD ARTWORK</button>
+      </form>
+    </div>
+  </div>
+  <script src="data/artworks.js"></script><script src="media-manager.js"></script><script src="app.js"></script>
 </body>
 </html>
