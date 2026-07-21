@@ -79,7 +79,7 @@
       const provider = new firebase.auth.GoogleAuthProvider();
       provider.addScope('email');
       provider.setCustomParameters({ prompt: 'select_account' });
-      await auth.signInWithRedirect(provider);
+      await auth.signInWithPopup(provider);
       return null;
     },
     signOut: () => auth.signOut(),
