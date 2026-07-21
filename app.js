@@ -68,7 +68,7 @@
       mediaButton.className = 'artwork-open'; mediaButton.type = 'button'; mediaButton.setAttribute('aria-label', `Open ${item.title || (item.type === 'video' ? 'video' : 'artwork')}`);
       mediaButton.innerHTML = `<span class="art-image"><img src="${mediaStore.thumbnail(item)}" alt="${escapeHtml(item.title || '')}" loading="lazy">${item.type === 'video' ? '<span class="play-mark" aria-hidden="true">▶</span>' : ''}</span><span class="art-info"><span><b>${escapeHtml(item.title || 'Untitled')}</b><small>${prettyCollection(item.collection)}${item.year ? ` · ${escapeHtml(item.year)}` : ''}</small></span><i>↗</i></span>`;
       mediaButton.addEventListener('click', () => openLightbox(index)); card.appendChild(mediaButton);
-      if (mediaStore.isOwner() && item.source !== 'repository') card.appendChild(ownerControls(item));
+      if (mediaStore.ownerRequested() && mediaStore.isOwner() && item.source !== 'repository') card.appendChild(ownerControls(item));
       grid.appendChild(card);
     });
     document.querySelector('#gallery-count').textContent = `${String(visible.length).padStart(2, '0')} ${current === 'videos' ? 'VIDEOS' : 'ARTWORKS'}`;
