@@ -276,12 +276,20 @@
 
   const settingsModal = document.querySelector('#settings-modal');
   const settingsForm = document.querySelector('#settings-form');
+  let backgroundUploadUrl = '';
   function previewBackground() {
     const type = document.querySelector('#background-type').value, value = document.querySelector('#background-value').value.trim(), preview = document.querySelector('#background-preview');
     preview.style.background = type === 'image' && value ? `url("${value.replace(/["'()]/g, '')}") center/cover` : type === 'gradient' ? (value || 'linear-gradient(120deg,#07070d,#421378)') : type === 'color' ? (value || '#07070d') : 'var(--bg)';
   }
   function openSettings() {
     const value = { ...defaultSettings, ...mediaStore.settings() };
+    backgroundUploadUrl = '';
+    if (!document.querySelector('#background-file')) {
+      const uploadLabel = document.createElement('label'); uploadLabel.textContent = 'UPLOAD BACKGROUND IMAGE ';
+      const uploadInput = document.createElement('input'); uploadInput.id = 'background-file'; uploadInput.type = 'file'; uploadInput.accept = 'image/jpeg,image/png,image/webp,image/gif';
+      uploadInput.addEventListener('change', () => { const file = uploadInput.files[0]; if (file) document.querySelector('#background-preview').style.background = `url("${URL.createObjectURL(file)}") center/cover`; });
+      uploadLabel.appendChild(uploadInput); document.querySelector('#background-preview').before(uploadLabel);
+    }
     document.querySelector('#background-type').value = value.backgroundType; document.querySelector('#background-value').value = value.backgroundValue;
     document.querySelector('#setting-brand').value = value.brand; document.querySelector('#setting-gallery').value = value.gallery; document.querySelector('#setting-eyebrow').value = value.eyebrow; document.querySelector('#setting-statement').value = value.statement;
     document.querySelector('#setting-font').value = value.font; document.querySelector('#setting-font-size').value = value.fontSize; document.querySelector('#setting-site-title').value = value.siteTitle; document.querySelector('#setting-site-description').value = value.siteDescription; document.querySelector('#setting-social-image').value = value.socialImage;
@@ -297,7 +305,7 @@
   toolbar?.querySelector('[data-settings]')?.addEventListener('click', openSettings);
   document.querySelector('[data-close-settings]')?.addEventListener('click', closeSettings);
   document.querySelector('#background-type')?.addEventListener('change', previewBackground); document.querySelector('#background-value')?.addEventListener('input', previewBackground);
-  settingsForm?.addEventListener('submit', async event => { event.preventDefault(); const save = event.submitter; save.disabled = true; try { await mediaStore.saveSettings({ backgroundType: document.querySelector('#background-type').value, backgroundValue: document.querySelector('#background-value').value.trim(), brand: document.querySelector('#setting-brand').value.trim() || defaultSettings.brand, gallery: document.querySelector('#setting-gallery').value.trim() || defaultSettings.gallery, eyebrow: document.querySelector('#setting-eyebrow').value.trim(), statement: document.querySelector('#setting-statement').value.trim(), font: document.querySelector('#setting-font').value, fontSize: Number(document.querySelector('#setting-font-size').value), siteTitle: document.querySelector('#setting-site-title').value.trim() || defaultSettings.siteTitle, siteDescription: document.querySelector('#setting-site-description').value.trim(), socialImage: document.querySelector('#setting-social-image').value.trim() }); document.querySelector('#settings-status').textContent = 'Settings saved and synced.'; } catch (error) { document.querySelector('#settings-status').textContent = error.message; } finally { save.disabled = false; } });
+  settingsForm?.addEventListener('submit', async event => { event.preventDefault(); const save = event.submitter; save.disabled = true; try { const backgroundFile = document.querySelector('#background-file')?.files[0]; if (backgroundFile) { if (backgroundFile.size > 20 * 1024 * 1024) throw new Error('Background image must be 20 MB or smaller.'); const upload = await mediaStore.upload(backgroundFile, 'image', () => {}); backgroundUploadUrl = upload.secure_url; document.querySelector('#background-type').value = 'image'; } await mediaStore.saveSettings({ backgroundType: document.querySelector('#background-type').value, backgroundValue: backgroundUploadUrl || document.querySelector('#background-value').value.trim(), brand: document.querySelector('#setting-brand').value.trim() || defaultSettings.brand, gallery: document.querySelector('#setting-gallery').value.trim() || defaultSettings.gallery, eyebrow: document.querySelector('#setting-eyebrow').value.trim(), statement: document.querySelector('#setting-statement').value.trim(), font: document.querySelector('#setting-font').value, fontSize: Number(document.querySelector('#setting-font-size').value), siteTitle: document.querySelector('#setting-site-title').value.trim() || defaultSettings.siteTitle, siteDescription: document.querySelector('#setting-site-description').value.trim(), socialImage: document.querySelector('#setting-social-image').value.trim() }); document.querySelector('#settings-status').textContent = 'Settings saved and synced.'; } catch (error) { document.querySelector('#settings-status').textContent = error.message; } finally { save.disabled = false; } });
   document.querySelector('[data-reset-settings]')?.addEventListener('click', async () => { await mediaStore.saveSettings(defaultSettings); openSettings(); });
 
   const sectionModal = document.querySelector('#section-modal'), sectionForm = document.querySelector('#section-form');

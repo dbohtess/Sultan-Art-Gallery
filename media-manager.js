@@ -75,12 +75,22 @@
     viewer,
     async signIn() {
       const provider = new firebase.auth.GoogleAuthProvider();
-      provider.setCustomParameters({ login_hint: OWNER_EMAIL });
+      provider.addScope('email');
+      provider.setCustomParameters({ prompt: 'select_account' });
+      await auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
+      const useRedirect = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+      if (useRedirect) {
+        await auth.signInWithRedirect(provider);
+        return null;
+      }
       let result;
       try { result = await auth.signInWithPopup(provider); }
       catch (error) {
         if (error.code === 'auth/popup-blocked') throw new Error('Google sign-in was blocked. Allow pop-ups for this site and try again.');
-        throw error;
+        if (error.code === 'auth/popup-closed-by-user') throw new Error('Google sign-in was cancelled.');
+        if (error.code === 'auth/unauthorized-domain') throw new Error('This website domain is not authorized for owner sign-in.');
+        if (error.code === 'auth/network-request-failed') throw new Error('Google sign-in could not reach Firebase. Check the connection and try again.');
+        throw new Error(error.message || 'Google sign-in could not be completed.');
       }
       if (result.user?.email !== OWNER_EMAIL) {
         await auth.signOut();
