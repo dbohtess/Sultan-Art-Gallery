@@ -48,8 +48,19 @@
       custom.forEach((section, index) => { const card = document.createElement('a'); card.dataset.customSection = section.id; card.className = 'category-card violet'; card.href = `gallery.html?view=${encodeURIComponent(section.slug)}`; card.innerHTML = `<span class="card-index">${String(index + 5).padStart(2, '0')}</span><div>${section.cover ? `<span class="section-cover" style="background-image:url('${section.cover.replace(/'/g, '')}')"></span>` : ''}<h3>${escapeHtml(section.name)}</h3><p>${escapeHtml(section.description)}</p></div><b>View gallery →</b>`; categoryGrid.appendChild(card); });
     }
   }
-  mediaStore.subscribe(() => { applySiteSettings(); renderDynamicNavigation(); });
-  applySiteSettings(); renderDynamicNavigation();
+  function preserveOwnerNavigation() {
+    const ownerLink = document.querySelector('.owner-access');
+    if (ownerLink && mediaStore.isOwner()) ownerLink.textContent = 'Owner Mode';
+    if (!mediaStore.ownerRequested()) return;
+    document.querySelectorAll('a[href]').forEach(link => {
+      const raw = link.getAttribute('href');
+      if (!raw || raw.startsWith('#') || /^(https?:|mailto:|tel:)/i.test(raw)) return;
+      const url = new URL(raw, location.href); url.searchParams.set('owner', '1');
+      link.href = `${url.pathname.split('/').pop()}${url.search}${url.hash}`;
+    });
+  }
+  mediaStore.subscribe(() => { applySiteSettings(); renderDynamicNavigation(); preserveOwnerNavigation(); });
+  applySiteSettings(); renderDynamicNavigation(); preserveOwnerNavigation();
 
   const featured = document.querySelector('#featured-artwork');
   if (featured) {
