@@ -7,6 +7,8 @@
   const auth = firebase.auth();
   const db = firebase.firestore();
   let cloudItems = [];
+  let siteSettings = {};
+  let customSections = [];
   let currentUser = null;
   let resolveReady;
   let readySettled = false;
@@ -30,7 +32,10 @@
   const viewer = item => item.type === 'image' ? cloudinaryUrl(item.url, 'f_auto,q_auto:best,w_2200,c_limit') : item.url;
 
   db.collection('media').onSnapshot(snapshot => {
-    cloudItems = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    const records = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    cloudItems = records.filter(item => !item.recordKind || item.recordKind === 'media');
+    siteSettings = records.find(item => item.recordKind === 'settings') || {};
+    customSections = records.filter(item => item.recordKind === 'section').sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
     if (!readySettled) { readySettled = true; resolveReady(); }
     notify();
   }, error => {
@@ -64,6 +69,8 @@
     subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); },
     all: () => [...repoItems(), ...cloudItems].sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
     local: () => cloudItems,
+    settings: () => ({ ...siteSettings }),
+    sections: () => customSections.map(section => ({ ...section })),
     thumbnail: thumb,
     viewer,
     async signIn() {
@@ -98,6 +105,22 @@
       requireOwner();
       const batch = db.batch();
       orderedIds.forEach((id, order) => batch.update(db.collection('media').doc(id), { order }));
+      await batch.commit();
+    },
+    async saveSettings(values) {
+      requireOwner();
+      await db.collection('media').doc('_site-settings').set({ ...values, recordKind: 'settings', updatedAt: new Date().toISOString() }, { merge: true });
+    },
+    async saveSection(section) {
+      requireOwner();
+      const id = section.id || `section-${crypto.randomUUID()}`;
+      await db.collection('media').doc(id).set({ ...section, id, recordKind: 'section', privacy: 'public' }, { merge: true });
+      return id;
+    },
+    async removeSection(id) { requireOwner(); await db.collection('media').doc(id).delete(); },
+    async reorderSections(ids) {
+      requireOwner(); const batch = db.batch();
+      ids.forEach((id, order) => batch.update(db.collection('media').doc(id), { order }));
       await batch.commit();
     },
     upload(file, kind, onProgress) {
