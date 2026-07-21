@@ -6,6 +6,7 @@
   const LEGACY_STORAGE_KEY = 'sultanGalleryMedia.v1';
   const auth = firebase.auth();
   const db = firebase.firestore();
+  auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(error => console.error('Authentication persistence could not be initialized.', error));
   let cloudItems = [];
   let siteSettings = {};
   let customSections = [];
@@ -77,7 +78,6 @@
       const provider = new firebase.auth.GoogleAuthProvider();
       provider.addScope('email');
       provider.setCustomParameters({ prompt: 'select_account' });
-      await auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
       const useRedirect = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
       if (useRedirect) {
         await auth.signInWithRedirect(provider);
