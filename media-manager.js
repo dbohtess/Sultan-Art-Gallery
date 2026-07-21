@@ -67,7 +67,16 @@
     thumbnail: thumb,
     viewer,
     async signIn() {
-      const result = await auth.signInWithPopup(new firebase.auth.GoogleAuthProvider());
+      const provider = new firebase.auth.GoogleAuthProvider();
+      let result;
+      try { result = await auth.signInWithPopup(provider); }
+      catch (error) {
+        if (['auth/popup-blocked', 'auth/cancelled-popup-request', 'auth/operation-not-supported-in-this-environment'].includes(error.code)) {
+          await auth.signInWithRedirect(provider);
+          return null;
+        }
+        throw error;
+      }
       if (result.user?.email !== OWNER_EMAIL) {
         await auth.signOut();
         throw new Error(`This Google account is not authorized. Sign in as ${OWNER_EMAIL}.`);
