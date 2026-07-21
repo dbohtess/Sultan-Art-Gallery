@@ -55,6 +55,7 @@
   };
   auth.onAuthStateChanged(user => {
     currentUser = user;
+    if (user && user.email !== OWNER_EMAIL) { auth.signOut(); currentUser = null; notify(); return; }
     if (user?.email === OWNER_EMAIL) migrateLegacyItems().catch(error => console.error('Legacy gallery metadata could not be migrated.', error));
     notify();
   });
@@ -78,25 +79,8 @@
       const provider = new firebase.auth.GoogleAuthProvider();
       provider.addScope('email');
       provider.setCustomParameters({ prompt: 'select_account' });
-      const useRedirect = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-      if (useRedirect) {
-        await auth.signInWithRedirect(provider);
-        return null;
-      }
-      let result;
-      try { result = await auth.signInWithPopup(provider); }
-      catch (error) {
-        if (error.code === 'auth/popup-blocked') throw new Error('Google sign-in was blocked. Allow pop-ups for this site and try again.');
-        if (error.code === 'auth/popup-closed-by-user') throw new Error('Google sign-in was cancelled.');
-        if (error.code === 'auth/unauthorized-domain') throw new Error('This website domain is not authorized for owner sign-in.');
-        if (error.code === 'auth/network-request-failed') throw new Error('Google sign-in could not reach Firebase. Check the connection and try again.');
-        throw new Error(error.message || 'Google sign-in could not be completed.');
-      }
-      if (result.user?.email !== OWNER_EMAIL) {
-        await auth.signOut();
-        throw new Error(`This Google account is not authorized. Sign in as ${OWNER_EMAIL}.`);
-      }
-      return result.user;
+      await auth.signInWithRedirect(provider);
+      return null;
     },
     signOut: () => auth.signOut(),
     async save(item) {
