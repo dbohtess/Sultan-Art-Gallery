@@ -11,9 +11,13 @@
 
   const featured = document.querySelector('#featured-artwork');
   if (featured) {
-    const allImages = mediaStore.all().filter(item => item.type === 'image');
-    const art = allImages.find(item => item.source !== 'repository' && item.featured) || allImages.find(item => item.featured) || allImages[0];
-    if (art) featured.innerHTML = `<div class="featured-frame"><img src="${mediaStore.viewer(art)}" alt="${escapeHtml(art.title || 'Featured artwork')}"><span>FEATURED ARTWORK</span><p>${escapeHtml(art.title || 'Untitled')}</p></div>`;
+    const renderFeatured = () => {
+      const allImages = mediaStore.all().filter(item => item.type === 'image');
+      const art = allImages.find(item => item.source !== 'repository' && item.featured) || allImages.find(item => item.featured) || allImages[0];
+      if (art) featured.innerHTML = `<div class="featured-frame"><img src="${mediaStore.viewer(art)}" alt="${escapeHtml(art.title || 'Featured artwork')}"><span>FEATURED ARTWORK</span><p>${escapeHtml(art.title || 'Untitled')}</p></div>`;
+    };
+    mediaStore.subscribe(renderFeatured);
+    renderFeatured();
   }
 
   const grid = document.querySelector('#artwork-grid');
@@ -79,24 +83,29 @@
     const handle = controls.querySelector('.drag-handle');
     handle.addEventListener('dragstart', event => { draggedId = item.id; event.dataTransfer.effectAllowed = 'move'; });
     controls.querySelector('[data-edit]').addEventListener('click', () => openMediaModal(item.type, item));
-    controls.querySelector('[data-remove]').addEventListener('click', () => {
-      if (confirm('Remove this item from this device’s gallery list? The Cloudinary asset will not be deleted.')) mediaStore.remove(item.id);
+    controls.querySelector('[data-remove]').addEventListener('click', async () => {
+      if (confirm('Remove this item from the shared gallery? The Cloudinary asset will not be deleted.')) {
+        try { await mediaStore.remove(item.id); } catch (error) { alert(error.message); }
+      }
     });
     controls.querySelector('[data-up]').addEventListener('click', () => moveLocal(item.id, -1));
     controls.querySelector('[data-down]').addEventListener('click', () => moveLocal(item.id, 1));
     return controls;
   }
   grid.addEventListener('dragover', event => { if (mediaStore.isOwner()) event.preventDefault(); });
-  grid.addEventListener('drop', event => {
+  grid.addEventListener('drop', async event => {
     event.preventDefault(); const target = event.target.closest('[data-media-id]');
     if (!target || !draggedId || target.dataset.mediaId === draggedId) return;
     const ids = visible.filter(item => item.source !== 'repository').map(item => item.id);
     const from = ids.indexOf(draggedId), to = ids.indexOf(target.dataset.mediaId); if (from < 0 || to < 0) return;
-    ids.splice(to, 0, ids.splice(from, 1)[0]); mediaStore.reorder(current, ids); draggedId = '';
+    ids.splice(to, 0, ids.splice(from, 1)[0]);
+    try { await mediaStore.reorder(current, ids); } catch (error) { alert(error.message); }
+    draggedId = '';
   });
-  function moveLocal(id, step) {
+  async function moveLocal(id, step) {
     const ids = visible.filter(item => item.source !== 'repository').map(item => item.id); const from = ids.indexOf(id), to = from + step;
-    if (from < 0 || to < 0 || to >= ids.length) return; [ids[from], ids[to]] = [ids[to], ids[from]]; mediaStore.reorder(current, ids);
+    if (from < 0 || to < 0 || to >= ids.length) return; [ids[from], ids[to]] = [ids[to], ids[from]];
+    try { await mediaStore.reorder(current, ids); } catch (error) { alert(error.message); }
   }
 
   const lightbox = document.querySelector('#lightbox');
@@ -125,9 +134,23 @@
   document.addEventListener('keydown', event => { if (lightbox.hidden) return; if (event.key === 'Escape') closeLightbox(); if (event.key === 'ArrowLeft') move(-1); if (event.key === 'ArrowRight') move(1); });
 
   const toolbar = document.querySelector('#owner-toolbar');
-  if (mediaStore.isOwner()) { toolbar.hidden = false; document.body.classList.add('owner-mode'); }
+  const updateOwnerUi = () => {
+    if (!mediaStore.ownerRequested()) return;
+    toolbar.hidden = false;
+    const owner = mediaStore.isOwner();
+    document.body.classList.toggle('owner-mode', owner);
+    toolbar.querySelector('#owner-status').textContent = owner ? `Signed in as ${mediaStore.user().email}. Changes sync across devices.` : 'Sign in with the authorized Google account.';
+    toolbar.querySelector('[data-owner-signin]').hidden = owner;
+    toolbar.querySelectorAll('[data-add-media]').forEach(button => { button.hidden = !owner; });
+    renderGallery();
+  };
+  updateOwnerUi();
+  mediaStore.subscribe(updateOwnerUi);
+  toolbar?.querySelector('[data-owner-signin]')?.addEventListener('click', async () => {
+    try { await mediaStore.signIn(); } catch (error) { alert(error.message); }
+  });
   toolbar?.querySelectorAll('[data-add-media]').forEach(button => button.addEventListener('click', () => openMediaModal(button.dataset.addMedia)));
-  toolbar?.querySelector('[data-owner-exit]')?.addEventListener('click', () => { const url = new URL(location.href); url.searchParams.delete('owner'); location.href = url.href; });
+  toolbar?.querySelector('[data-owner-exit]')?.addEventListener('click', async () => { await mediaStore.signOut(); const url = new URL(location.href); url.searchParams.delete('owner'); location.href = url.href; });
 
   const modal = document.querySelector('#media-modal');
   const form = document.querySelector('#media-form');
@@ -166,10 +189,10 @@
         width: upload?.width || existing?.width || 0, height: upload?.height || existing?.height || 0,
         orientation: orientationFromDimensions(upload?.width || existing?.width, upload?.height || existing?.height), order: existing?.order ?? mediaStore.local().length, createdAt: existing?.createdAt || new Date().toISOString(), source: 'cloudinary'
       };
-      if (!item.url) throw new Error('Choose a media file.'); mediaStore.save(item); closeMediaModal();
+      if (!item.url) throw new Error('Choose a media file.'); await mediaStore.save(item); closeMediaModal();
     } catch (error) { status.textContent = error.message; }
     finally { saveButton.disabled = false; }
   });
-  window.addEventListener('gallery-media-change', renderGallery);
+  mediaStore.subscribe(renderGallery);
   renderGallery();
 })();

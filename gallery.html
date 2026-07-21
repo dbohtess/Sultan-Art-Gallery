@@ -18,8 +18,8 @@
   <main class="gallery-main section-shell">
     <header class="gallery-heading"><p id="gallery-kicker" class="eyebrow">Personal archive</p><h1 id="gallery-title">MY DRAWINGS</h1><p id="gallery-intro">Original artwork drawn by me.</p><span id="gallery-count"></span></header>
     <div id="owner-toolbar" class="owner-toolbar" hidden>
-      <p><b>OWNER MODE</b><span>Local development controls — not secure authentication</span></p>
-      <div><button type="button" data-add-media="image">+ ADD ARTWORK</button><button type="button" data-add-media="video">+ ADD VIDEO</button><button type="button" data-owner-exit>EXIT OWNER MODE</button></div>
+      <p><b>OWNER MODE</b><span id="owner-status">Sign in with the authorized Google account.</span></p>
+      <div><button type="button" data-owner-signin>SIGN IN WITH GOOGLE</button><button type="button" data-add-media="image" hidden>+ ADD ARTWORK</button><button type="button" data-add-media="video" hidden>+ ADD VIDEO</button><button type="button" data-owner-exit>EXIT OWNER MODE</button></div>
     </div>
     <div id="artwork-grid" class="artwork-grid" aria-live="polite"></div>
     <p id="empty-gallery" class="empty-gallery" hidden>No artwork has been added to this collection yet.</p>
@@ -52,6 +52,6 @@
       </form>
     </div>
   </div>
-  <script src="data/artworks.js"></script><script src="media-manager.js?v=2"></script><script src="app.js?v=2"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script><script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script><script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script><script src="firebase-config.js?v=3"></script><script src="data/artworks.js"></script><script src="media-manager.js?v=3"></script><script src="app.js?v=3"></script>
 </body>
 </html>

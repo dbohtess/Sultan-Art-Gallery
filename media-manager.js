@@ -2,20 +2,20 @@
   'use strict';
   const CLOUD_NAME = 'wqgyhwiu';
   const UPLOAD_PRESET = 'Sultan_Art_Gallery';
-  const STORAGE_KEY = 'sultanGalleryMedia.v1';
+  const OWNER_EMAIL = 'sultan.dbohtes@gmail.com';
+  const LEGACY_STORAGE_KEY = 'sultanGalleryMedia.v1';
+  const auth = firebase.auth();
+  const db = firebase.firestore();
+  let cloudItems = [];
+  let currentUser = null;
+  let resolveReady;
+  let readySettled = false;
+  const listeners = new Set();
+  const ready = new Promise(resolve => { resolveReady = resolve; });
+  const notify = () => listeners.forEach(listener => listener());
 
-  const readLocal = () => {
-    try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); }
-    catch { return []; }
-  };
-  const writeLocal = items => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
-    window.dispatchEvent(new CustomEvent('gallery-media-change'));
-  };
   const repoItems = () => (window.ARTWORKS || []).map((art, index) => ({
-    id: `repo-${index}`,
-    type: 'image',
-    title: art.title || '', description: art.description || '', year: art.year || '',
+    id: `repo-${index}`, type: 'image', title: art.title || '', description: art.description || '', year: art.year || '',
     collection: art.collection === 'Nekorin' ? 'nekorin' : (art.type === 'ai-art' ? 'ai-art' : 'my-drawings'),
     url: art.image, thumbnail: art.image, publicId: '', featured: Boolean(art.featured),
     orientation: art.orientation || 'portrait', order: index, createdAt: '', source: 'repository'
@@ -29,26 +29,69 @@
     : cloudinaryUrl(item.url, 'f_auto,q_auto:good,w_900,c_limit');
   const viewer = item => item.type === 'image' ? cloudinaryUrl(item.url, 'f_auto,q_auto:best,w_2200,c_limit') : item.url;
 
+  db.collection('media').onSnapshot(snapshot => {
+    cloudItems = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    if (!readySettled) { readySettled = true; resolveReady(); }
+    notify();
+  }, error => {
+    console.error('Gallery metadata could not be loaded.', error);
+    if (!readySettled) { readySettled = true; resolveReady(); }
+    notify();
+  });
+  const migrateLegacyItems = async () => {
+    let items = [];
+    try { items = JSON.parse(localStorage.getItem(LEGACY_STORAGE_KEY) || '[]'); } catch { return; }
+    if (!items.length) return;
+    const batch = db.batch();
+    items.forEach(item => batch.set(db.collection('media').doc(item.id), item, { merge: true }));
+    await batch.commit();
+    localStorage.removeItem(LEGACY_STORAGE_KEY);
+  };
+  auth.onAuthStateChanged(user => {
+    currentUser = user;
+    if (user?.email === OWNER_EMAIL) migrateLegacyItems().catch(error => console.error('Legacy gallery metadata could not be migrated.', error));
+    notify();
+  });
+
+  const requireOwner = () => {
+    if (!currentUser || currentUser.email !== OWNER_EMAIL) throw new Error('Owner sign-in is required.');
+  };
   const manager = {
-    isOwner: () => new URLSearchParams(location.search).get('owner') === '1',
-    all: () => [...repoItems(), ...readLocal()].sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
-    local: readLocal,
+    ready,
+    ownerRequested: () => new URLSearchParams(location.search).get('owner') === '1',
+    isOwner: () => currentUser?.email === OWNER_EMAIL,
+    user: () => currentUser,
+    subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); },
+    all: () => [...repoItems(), ...cloudItems].sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
+    local: () => cloudItems,
     thumbnail: thumb,
     viewer,
-    save(item) {
-      const items = readLocal();
-      const index = items.findIndex(existing => existing.id === item.id);
-      if (item.featured && item.type === 'image') items.forEach(existing => { existing.featured = false; });
-      if (index >= 0) items[index] = { ...items[index], ...item };
-      else items.push(item);
-      writeLocal(items);
+    async signIn() {
+      const result = await auth.signInWithPopup(new firebase.auth.GoogleAuthProvider());
+      if (result.user?.email !== OWNER_EMAIL) {
+        await auth.signOut();
+        throw new Error(`This Google account is not authorized. Sign in as ${OWNER_EMAIL}.`);
+      }
+      return result.user;
     },
-    remove(id) { writeLocal(readLocal().filter(item => item.id !== id)); },
-    reorder(collection, orderedIds) {
-      const items = readLocal();
-      const orderMap = new Map(orderedIds.map((id, index) => [id, index]));
-      items.forEach(item => { if (item.collection === collection && orderMap.has(item.id)) item.order = orderMap.get(item.id); });
-      writeLocal(items);
+    signOut: () => auth.signOut(),
+    async save(item) {
+      requireOwner();
+      const batch = db.batch();
+      if (item.featured && item.type === 'image') {
+        cloudItems.filter(existing => existing.featured && existing.id !== item.id).forEach(existing => {
+          batch.update(db.collection('media').doc(existing.id), { featured: false });
+        });
+      }
+      batch.set(db.collection('media').doc(item.id), item, { merge: true });
+      await batch.commit();
+    },
+    async remove(id) { requireOwner(); await db.collection('media').doc(id).delete(); },
+    async reorder(collection, orderedIds) {
+      requireOwner();
+      const batch = db.batch();
+      orderedIds.forEach((id, order) => batch.update(db.collection('media').doc(id), { order }));
+      await batch.commit();
     },
     upload(file, kind, onProgress) {
       return new Promise((resolve, reject) => {
