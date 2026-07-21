@@ -68,13 +68,11 @@
     viewer,
     async signIn() {
       const provider = new firebase.auth.GoogleAuthProvider();
+      provider.setCustomParameters({ login_hint: OWNER_EMAIL });
       let result;
       try { result = await auth.signInWithPopup(provider); }
       catch (error) {
-        if (['auth/popup-blocked', 'auth/cancelled-popup-request', 'auth/operation-not-supported-in-this-environment'].includes(error.code)) {
-          await auth.signInWithRedirect(provider);
-          return null;
-        }
+        if (error.code === 'auth/popup-blocked') throw new Error('Google sign-in was blocked. Allow pop-ups for this site and try again.');
         throw error;
       }
       if (result.user?.email !== OWNER_EMAIL) {
