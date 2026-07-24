@@ -133,7 +133,10 @@
         const link = document.createElement("a");
         link.dataset.customSection = section.id;
         link.href = `gallery.html?view=${encodeURIComponent(section.slug)}`;
-        link.textContent = section.name;
+        link.textContent =
+          section.privacy === "private" ? `◇ ${section.name}` : section.name;
+        if (section.privacy === "private")
+          link.setAttribute("aria-label", `Private section: ${section.name}`);
         navElement.appendChild(link);
       });
     });
@@ -145,9 +148,9 @@
       custom.forEach((section, index) => {
         const card = document.createElement("a");
         card.dataset.customSection = section.id;
-        card.className = "category-card violet";
+        card.className = `category-card violet${section.privacy === "private" ? " private-section-card" : ""}`;
         card.href = `gallery.html?view=${encodeURIComponent(section.slug)}`;
-        card.innerHTML = `<span class="card-index">${String(index + 5).padStart(2, "0")}</span><div>${section.cover ? `<span class="section-cover" style="background-image:url('${section.cover.replace(/'/g, "")}')"></span>` : ""}<h3>${escapeHtml(section.name)}</h3><p>${escapeHtml(section.description)}</p></div><b>View gallery →</b>`;
+        card.innerHTML = `<span class="card-index">${String(index + 5).padStart(2, "0")}${section.privacy === "private" ? '<i class="private-card-lock" aria-label="Private section">PRIVATE</i>' : ""}</span><div>${section.cover ? `<span class="section-cover" style="background-image:url('${section.cover.replace(/'/g, "")}')"></span>` : ""}<h3>${escapeHtml(section.name)}</h3><p>${escapeHtml(section.description)}</p></div><b>${section.privacy === "private" ? "Unlock collection" : "View gallery"} →</b>`;
         categoryGrid.appendChild(card);
       });
     }
@@ -281,6 +284,10 @@ if (featured) {
   let returnFocus = null;
   let draggedId = "";
   let directArtworkOpened = false;
+  let privateLoadInFlight = false;
+  let privateUnlockTransition = false;
+  const privateGate = document.querySelector("#private-gate");
+  const privateCodeForm = document.querySelector("#private-code-form");
 
   document.title = `${settings[current][0]} — Sultan Art Gallery`;
   document.querySelector("#gallery-title").textContent = settings[current][0];
@@ -324,7 +331,9 @@ if (featured) {
     if (customCurrent) {
       settings[current] = [
         customCurrent.name,
-        "Public collection",
+        customCurrent.privacy === "private"
+          ? "Private collection"
+          : "Public collection",
         customCurrent.description || "Selected artwork collection.",
       ];
       document.querySelector("#gallery-title").textContent =
@@ -337,13 +346,62 @@ if (featured) {
         .querySelector(`[data-custom-section="${customCurrent.id}"]`)
         ?.classList.add("active");
     }
-    visible = mediaStore
-      .all()
-      .filter((item) =>
-        current === "videos"
-          ? item.type === "video"
-          : item.type === "image" && item.collection === current,
-      );
+    const isPrivate = customCurrent?.privacy === "private";
+    const authorizedPrivateItems = isPrivate
+      ? mediaStore.privateItems(customCurrent.id)
+      : null;
+    if (isPrivate && !authorizedPrivateItems) {
+      visible = [];
+      grid.innerHTML = "";
+      grid.hidden = true;
+      privateGate.hidden = mediaStore.isOwner();
+      if (!mediaStore.isOwner() && !privateGate.dataset.focused) {
+        privateGate.dataset.focused = "true";
+        setTimeout(
+          () => privateCodeForm.querySelector("input")?.focus(),
+          0,
+        );
+      }
+      document.querySelector("#empty-gallery").hidden = true;
+      document.querySelector("#gallery-count").textContent = "PRIVATE";
+      if (
+        (mediaStore.isOwner() ||
+          mediaStore.hasPrivateSession(customCurrent.id)) &&
+        !privateLoadInFlight
+      ) {
+        privateLoadInFlight = true;
+        mediaStore
+          .openPrivateSection(customCurrent.id)
+          .catch((error) => {
+            document.querySelector("#empty-gallery").textContent = error.message;
+            document.querySelector("#empty-gallery").hidden = false;
+          })
+          .finally(() => {
+            privateLoadInFlight = false;
+          });
+      }
+      return;
+    }
+    if (isPrivate && privateUnlockTransition) {
+      visible = authorizedPrivateItems || [];
+      grid.hidden = true;
+      privateGate.hidden = false;
+      document.querySelector("#empty-gallery").hidden = true;
+      document.querySelector("#gallery-count").textContent = "UNLOCKED";
+      return;
+    }
+    privateGate.hidden = true;
+    privateGate.classList.remove("is-error", "is-success", "is-loading");
+    grid.hidden = false;
+    visible = isPrivate
+      ? authorizedPrivateItems
+      : mediaStore
+          .all()
+          .filter((item) =>
+            current === "videos"
+              ? item.type === "video"
+              : item.type === "image" && item.collection === current,
+          );
     grid.innerHTML = "";
     visible.forEach((item, index) => {
       const card = document.createElement("article");
@@ -385,6 +443,83 @@ if (featured) {
     }
   }
 
+  if (privateCodeForm) {
+    const digitInputs = Array.from(
+      privateCodeForm.querySelectorAll(".private-code-digits input"),
+    );
+    const privateStatus = document.querySelector("#private-code-status");
+    const readCode = () => digitInputs.map((input) => input.value).join("");
+    const fillCode = (value) => {
+      const digits = String(value).replace(/\D/g, "").slice(0, 6);
+      digitInputs.forEach((input, index) => {
+        input.value = digits[index] || "";
+      });
+      digitInputs[Math.min(digits.length, 5)]?.focus();
+    };
+    digitInputs.forEach((input, index) => {
+      input.addEventListener("input", () => {
+        input.value = input.value.replace(/\D/g, "").slice(-1);
+        if (input.value && index < 5) digitInputs[index + 1].focus();
+      });
+      input.addEventListener("keydown", (event) => {
+        if (event.key === "Backspace" && !input.value && index > 0) {
+          digitInputs[index - 1].focus();
+          digitInputs[index - 1].value = "";
+        }
+        if (event.key === "ArrowLeft" && index > 0)
+          digitInputs[index - 1].focus();
+        if (event.key === "ArrowRight" && index < 5)
+          digitInputs[index + 1].focus();
+      });
+      input.addEventListener("paste", (event) => {
+        const pasted = event.clipboardData?.getData("text")?.trim() || "";
+        if (/^\d{6}$/.test(pasted)) {
+          event.preventDefault();
+          fillCode(pasted);
+        }
+      });
+    });
+    privateCodeForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const code = readCode();
+      if (!customCurrent || code.length !== 6) {
+        privateStatus.textContent = "Enter all six digits.";
+        privateGate.classList.remove("is-error");
+        void privateGate.offsetWidth;
+        privateGate.classList.add("is-error");
+        return;
+      }
+      privateGate.classList.remove("is-error");
+      privateGate.classList.add("is-loading");
+      privateStatus.textContent = "Checking access…";
+      digitInputs.forEach((input) => (input.disabled = true));
+      try {
+        privateUnlockTransition = true;
+        await mediaStore.openPrivateSection(customCurrent.id, code);
+        privateGate.classList.remove("is-loading");
+        privateGate.classList.add("is-success");
+        privateStatus.textContent = "Access granted.";
+        setTimeout(() => {
+          privateUnlockTransition = false;
+          renderGallery();
+        }, 520);
+      } catch (error) {
+        privateUnlockTransition = false;
+        privateGate.classList.remove("is-loading");
+        void privateGate.offsetWidth;
+        privateGate.classList.add("is-error");
+        privateStatus.textContent =
+          error.code === "rate-limited"
+            ? `Too many attempts. Try again in ${Math.max(1, Math.ceil(error.retryAfter / 60))} minute(s).`
+            : "Incorrect access code. Please try again.";
+        fillCode("");
+      } finally {
+        digitInputs.forEach((input) => (input.disabled = false));
+        digitInputs[0]?.focus();
+      }
+    });
+  }
+
   function ownerControls(item) {
     const controls = document.createElement("div");
     controls.className = "owner-card-controls";
@@ -401,124 +536,7 @@ if (featured) {
       .querySelector("[data-share]")
       .addEventListener("click", () =>
         shareUrl(
-          `${location.origin}${location.pathname}?view=${encodeURIComponent(requestedView)}&artwork=${encodeURIComponent(item.id)}`,
-          item.title || "Sultan Art Gallery",
-        ),
-      );
-    controls
-      .querySelector("[data-remove]")
-      .addEventListener("click", async () => {
-        if (
-          confirm(
-            "Remove this item from the shared gallery? The Cloudinary asset will not be deleted.",
-          )
-        ) {
-          try {
-            await mediaStore.remove(item.id);
-          } catch (error) {
-            alert(error.message);
-          }
-        }
-      });
-    controls
-      .querySelector("[data-up]")
-      .addEventListener("click", () => moveLocal(item.id, -1));
-    controls
-      .querySelector("[data-down]")
-      .addEventListener("click", () => moveLocal(item.id, 1));
-    return controls;
-  }
-  grid.addEventListener("dragover", (event) => {
-    if (mediaStore.isOwner()) event.preventDefault();
-  });
-  grid.addEventListener("drop", async (event) => {
-    event.preventDefault();
-    const target = event.target.closest("[data-media-id]");
-    if (!target || !draggedId || target.dataset.mediaId === draggedId) return;
-    const ids = visible
-      .filter((item) => item.source !== "repository")
-      .map((item) => item.id);
-    const from = ids.indexOf(draggedId),
-      to = ids.indexOf(target.dataset.mediaId);
-    if (from < 0 || to < 0) return;
-    ids.splice(to, 0, ids.splice(from, 1)[0]);
-    try {
-      await mediaStore.reorder(current, ids);
-    } catch (error) {
-      alert(error.message);
-    }
-    draggedId = "";
-  });
-  async function moveLocal(id, step) {
-    const ids = visible
-      .filter((item) => item.source !== "repository")
-      .map((item) => item.id);
-    const from = ids.indexOf(id),
-      to = from + step;
-    if (from < 0 || to < 0 || to >= ids.length) return;
-    [ids[from], ids[to]] = [ids[to], ids[from]];
-    try {
-      await mediaStore.reorder(current, ids);
-    } catch (error) {
-      alert(error.message);
-    }
-  }
-
-  const lightbox = document.querySelector("#lightbox");
-  const lightboxImage = document.querySelector("#lightbox-image");
-  const lightboxVideo = document.querySelector("#lightbox-video");
-  function renderLightbox() {
-    const item = visible[active];
-    if (!item) return;
-    const isVideo = item.type === "video";
-    lightboxImage.hidden = isVideo;
-    lightboxVideo.hidden = !isVideo;
-    if (isVideo) {
-      lightboxImage.removeAttribute("src");
-      lightboxVideo.src = mediaStore.viewer(item);
-      lightboxVideo.poster = mediaStore.thumbnail(item);
-    } else {
-      lightboxVideo.pause();
-      lightboxVideo.removeAttribute("src");
-      lightboxImage.src = mediaStore.viewer(item);
-      lightboxImage.alt = item.title || "Artwork";
-    }
-    document.querySelector("#lightbox-title").textContent =
-      item.title || "Untitled";
-    document.querySelector("#lightbox-type").textContent = isVideo
-      ? "VIDEO"
-      : prettyCollection(item.collection);
-    document.querySelector("#lightbox-meta").textContent = [
-      prettyCollection(item.collection),
-      item.year,
-    ]
-      .filter(Boolean)
-      .join(" · ");
-    document.querySelector("#lightbox-description").textContent =
-      item.description || "";
-    document.querySelector("#lightbox-current").textContent = String(
-      active + 1,
-    ).padStart(2, "0");
-    document.querySelector("#lightbox-total").textContent = String(
-      visible.length,
-    ).padStart(2, "0");
-  }
-  function openLightbox(index) {
-    active = index;
-    returnFocus = document.activeElement;
-    renderLightbox();
-    lightbox.hidden = false;
-    document.body.classList.add("viewer-open");
-    document.querySelector(".lightbox-close").focus();
-  }
-  function closeLightbox() {
-    lightboxVideo.pause();
-    lightbox.hidden = true;
-    document.body.classList.remove("viewer-open");
-    returnFocus?.focus();
-  }
-  function move(step) {
-    active = (active + step + visible.length) % visible.length;
+          `${location.origin}${location.pathname}?view=${encodeURIComponent(requestedView)}&artw…967 tokens truncated… + step + visible.length) % visible.length;
     renderLightbox();
   }
   document
@@ -568,7 +586,7 @@ if (featured) {
       remove.addEventListener("click", async () => {
         if (
           confirm(
-            "Delete this public section? Its media files will remain in Cloudinary.",
+            "Delete this section? Its media files will remain in Cloudinary.",
           )
         ) {
           await mediaStore.removeSection(customCurrent.id);
@@ -693,10 +711,19 @@ if (featured) {
           );
         const progress = document.querySelector("#upload-progress");
         progress.hidden = false;
-        upload = await mediaStore.upload(file, kind, (percent) => {
-          progress.querySelector("span").style.width = `${percent}%`;
-          progress.querySelector("b").textContent = `${percent}%`;
-        });
+        const uploadCollection =
+          kind === "video"
+            ? "videos"
+            : document.querySelector("#media-collection").value;
+        upload = await mediaStore.upload(
+          file,
+          kind,
+          (percent) => {
+            progress.querySelector("span").style.width = `${percent}%`;
+            progress.querySelector("b").textContent = `${percent}%`;
+          },
+          uploadCollection,
+        );
       }
       const item = {
         ...(existing || {}),
@@ -724,7 +751,7 @@ if (featured) {
         createdAt: existing?.createdAt || new Date().toISOString(),
         source: "cloudinary",
       };
-      if (!item.url) throw new Error("Choose a media file.");
+      if (!item.url && !item.publicId) throw new Error("Choose a media file.");
       await mediaStore.save(item);
       closeMediaModal();
     } catch (error) {
@@ -814,17 +841,17 @@ if (featured) {
     }
     const sections = mediaStore.sections();
     panel.innerHTML = sections.length
-      ? "<h3>PUBLIC SECTIONS</h3>"
-      : "<h3>PUBLIC SECTIONS</h3><p>No custom sections yet.</p>";
+      ? "<h3>SECTIONS</h3>"
+      : "<h3>SECTIONS</h3><p>No custom sections yet.</p>";
     sections.forEach((section, index) => {
       const row = document.createElement("div");
-      row.innerHTML = `<span>${escapeHtml(section.name)}</span><button type="button" data-edit>EDIT</button><button type="button" data-up ${index === 0 ? "disabled" : ""}>↑</button><button type="button" data-down ${index === sections.length - 1 ? "disabled" : ""}>↓</button><button type="button" data-delete>DELETE</button>`;
+      row.innerHTML = `<span>${section.privacy === "private" ? "◇ " : ""}${escapeHtml(section.name)}<small>${section.privacy === "private" ? "PRIVATE" : "PUBLIC"}</small></span><button type="button" data-edit>EDIT</button><button type="button" data-up ${index === 0 ? "disabled" : ""}>↑</button><button type="button" data-down ${index === sections.length - 1 ? "disabled" : ""}>↓</button><button type="button" data-delete>DELETE</button>`;
       row.querySelector("[data-edit]").addEventListener("click", () => {
         closeSettings();
         openSectionModal(section);
       });
       row.querySelector("[data-delete]").addEventListener("click", async () => {
-        if (confirm("Delete this public section?")) {
+        if (confirm("Delete this section?")) {
           await mediaStore.removeSection(section.id);
           renderSectionManagement();
         }
@@ -921,16 +948,38 @@ if (featured) {
 
   const sectionModal = document.querySelector("#section-modal"),
     sectionForm = document.querySelector("#section-form");
+  const sectionPrivacy = document.querySelector("#section-privacy");
+  const sectionCode = document.querySelector("#section-code");
+  const sectionCodeLabel = document.querySelector("#section-code-label");
+  let editingSection = null;
+  function updateSectionPrivacyFields() {
+    const isPrivate = sectionPrivacy.value === "private";
+    sectionCodeLabel.hidden = !isPrivate;
+    sectionCode.required = isPrivate && editingSection?.privacy !== "private";
+    sectionCode.placeholder =
+      editingSection?.privacy === "private"
+        ? "Leave blank to keep the current code"
+        : "Enter your chosen 6 digits";
+  }
   function openSectionModal(section = null) {
+    editingSection = section;
     sectionForm.reset();
+    document.querySelector("#section-status").textContent = "";
     document.querySelector("#section-id").value = section?.id || "";
     document.querySelector("#section-name").value = section?.name || "";
     document.querySelector("#section-description").value =
       section?.description || "";
     document.querySelector("#section-cover").value = section?.cover || "";
+    sectionPrivacy.value = section?.privacy || "public";
+    sectionCode.value = "";
+    updateSectionPrivacyFields();
     sectionModal.hidden = false;
     document.body.classList.add("viewer-open");
   }
+  sectionPrivacy?.addEventListener("change", updateSectionPrivacyFields);
+  sectionCode?.addEventListener("input", () => {
+    sectionCode.value = sectionCode.value.replace(/\D/g, "").slice(0, 6);
+  });
   toolbar
     ?.querySelector("[data-add-section]")
     ?.addEventListener("click", () => openSectionModal());
@@ -952,16 +1001,30 @@ if (featured) {
           .replace(/^-|-$/g, "") || `collection-${Date.now()}`;
     try {
       const old = mediaStore.sections().find((section) => section.id === id);
-      await mediaStore.saveSection({
-        id,
-        name,
-        slug: old?.slug || base,
-        description: document
-          .querySelector("#section-description")
-          .value.trim(),
-        cover: document.querySelector("#section-cover").value.trim(),
-        order: old?.order ?? mediaStore.sections().length + 4,
-      });
+      const privacy = sectionPrivacy.value;
+      const accessCode = sectionCode.value;
+      if (
+        privacy === "private" &&
+        old?.privacy !== "private" &&
+        !/^\d{6}$/.test(accessCode)
+      )
+        throw new Error("Choose exactly six numeric digits for this private section.");
+      if (accessCode && !/^\d{6}$/.test(accessCode))
+        throw new Error("The access code must contain exactly six numeric digits.");
+      await mediaStore.saveSection(
+        {
+          id,
+          name,
+          slug: old?.slug || base,
+          description: document
+            .querySelector("#section-description")
+            .value.trim(),
+          cover: document.querySelector("#section-cover").value.trim(),
+          privacy,
+          order: old?.order ?? mediaStore.sections().length + 4,
+        },
+        accessCode,
+      );
       sectionModal.hidden = true;
       document.body.classList.remove("viewer-open");
     } catch (error) {
