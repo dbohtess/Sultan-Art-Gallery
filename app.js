@@ -536,7 +536,124 @@ if (featured) {
       .querySelector("[data-share]")
       .addEventListener("click", () =>
         shareUrl(
-          `${location.origin}${location.pathname}?view=${encodeURIComponent(requestedView)}&artw…967 tokens truncated… + step + visible.length) % visible.length;
+          `${location.origin}${location.pathname}?view=${encodeURIComponent(requestedView)}&artwork=${encodeURIComponent(item.id)}`,
+          item.title || "Sultan Art Gallery",
+        ),
+      );
+    controls
+      .querySelector("[data-remove]")
+      .addEventListener("click", async () => {
+        if (
+          confirm(
+            "Remove this item from the shared gallery? The Cloudinary asset will not be deleted.",
+          )
+        ) {
+          try {
+            await mediaStore.remove(item.id);
+          } catch (error) {
+            alert(error.message);
+          }
+        }
+      });
+    controls
+      .querySelector("[data-up]")
+      .addEventListener("click", () => moveLocal(item.id, -1));
+    controls
+      .querySelector("[data-down]")
+      .addEventListener("click", () => moveLocal(item.id, 1));
+    return controls;
+  }
+  grid.addEventListener("dragover", (event) => {
+    if (mediaStore.isOwner()) event.preventDefault();
+  });
+  grid.addEventListener("drop", async (event) => {
+    event.preventDefault();
+    const target = event.target.closest("[data-media-id]");
+    if (!target || !draggedId || target.dataset.mediaId === draggedId) return;
+    const ids = visible
+      .filter((item) => item.source !== "repository")
+      .map((item) => item.id);
+    const from = ids.indexOf(draggedId),
+      to = ids.indexOf(target.dataset.mediaId);
+    if (from < 0 || to < 0) return;
+    ids.splice(to, 0, ids.splice(from, 1)[0]);
+    try {
+      await mediaStore.reorder(current, ids);
+    } catch (error) {
+      alert(error.message);
+    }
+    draggedId = "";
+  });
+  async function moveLocal(id, step) {
+    const ids = visible
+      .filter((item) => item.source !== "repository")
+      .map((item) => item.id);
+    const from = ids.indexOf(id),
+      to = from + step;
+    if (from < 0 || to < 0 || to >= ids.length) return;
+    [ids[from], ids[to]] = [ids[to], ids[from]];
+    try {
+      await mediaStore.reorder(current, ids);
+    } catch (error) {
+      alert(error.message);
+    }
+  }
+
+  const lightbox = document.querySelector("#lightbox");
+  const lightboxImage = document.querySelector("#lightbox-image");
+  const lightboxVideo = document.querySelector("#lightbox-video");
+  function renderLightbox() {
+    const item = visible[active];
+    if (!item) return;
+    const isVideo = item.type === "video";
+    lightboxImage.hidden = isVideo;
+    lightboxVideo.hidden = !isVideo;
+    if (isVideo) {
+      lightboxImage.removeAttribute("src");
+      lightboxVideo.src = mediaStore.viewer(item);
+      lightboxVideo.poster = mediaStore.thumbnail(item);
+    } else {
+      lightboxVideo.pause();
+      lightboxVideo.removeAttribute("src");
+      lightboxImage.src = mediaStore.viewer(item);
+      lightboxImage.alt = item.title || "Artwork";
+    }
+    document.querySelector("#lightbox-title").textContent =
+      item.title || "Untitled";
+    document.querySelector("#lightbox-type").textContent = isVideo
+      ? "VIDEO"
+      : prettyCollection(item.collection);
+    document.querySelector("#lightbox-meta").textContent = [
+      prettyCollection(item.collection),
+      item.year,
+    ]
+      .filter(Boolean)
+      .join(" · ");
+    document.querySelector("#lightbox-description").textContent =
+      item.description || "";
+    document.querySelector("#lightbox-current").textContent = String(
+      active + 1,
+    ).padStart(2, "0");
+    document.querySelector("#lightbox-total").textContent = String(
+      visible.length,
+    ).padStart(2, "0");
+  }
+  function openLightbox(index) {
+    active = index;
+    returnFocus = document.activeElement;
+    renderLightbox();
+    lightbox.hidden = false;
+    document.body.classList.add("viewer-open");
+    document.querySelector(".lightbox-close").focus();
+  }
+  function closeLightbox() {
+    lightboxVideo.pause();
+    lightbox.hidden = true;
+    document.body.classList.remove("viewer-open");
+    returnFocus?.focus();
+  }
+  function move(step) {
+    active = (active + step + visible.length) % visible.length;
     renderLightbox();
   }
   document
