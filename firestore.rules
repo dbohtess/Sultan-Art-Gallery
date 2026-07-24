@@ -1,0 +1,32 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isOwner() {
+      return request.auth != null
+        && request.auth.token.email_verified == true
+        && request.auth.token.email == 'sultan.dbohtes@gmail.com';
+    }
+
+    // Existing public gallery data and sanitized section cards.
+    match /media/{documentId} {
+      allow read: if true;
+      allow create, update, delete: if isOwner();
+    }
+
+    // PIN hashes, private artwork metadata, access sessions and rate-limit
+    // records are server-only. Firebase Admin in Cloud Functions bypasses rules.
+    match /privateSections/{document=**} {
+      allow read, write: if false;
+    }
+    match /_privateAccess/{document=**} {
+      allow read, write: if false;
+    }
+    match /_privateRateLimits/{document=**} {
+      allow read, write: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
